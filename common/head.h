@@ -29,9 +29,13 @@
 
 
 #include "common.h"      //the head file which wrote by personally
+#include "color.h"
 #include "my_pipe.h"
 #include "thread_pool.h"
 #include "reactor.h"
 #include "add_to_subreactor.h"
+#include "pihealth.h"
 
+
+char conf_ans[512];
 #endif
