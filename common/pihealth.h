@@ -7,4 +7,10 @@
 
 #ifndef _PIHEALTH_H
 #define _PIHEALTH_H
+struct client_ds {
+    int sockfd;
+    int isonline;
+    struct sockaddr_in addr;
+};
+void *do_login(void *arg);
 #endif
