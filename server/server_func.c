@@ -7,9 +7,53 @@
 
 #include "head.h"
 
+#define MAXEVENTS 5
 extern char token[100];
 extern struct client_ds *clients;
 extern int epollfd, max;
+
+void *work_on_reactor(void *arg) {
+    struct epoll_event ev, events[MAXEVENTS];
+    for (;;) {
+        int nfds = epoll_wait(epollfd, events, MAXEVENTS, -1);
+        if (nfds < 0) {
+            perror("epoll_wait");
+            exit(1);
+        }
+        for (int i = 0; i < nfds; i++) {
+            struct pihealth_msg_ds msg;
+            bzero(&msg, sizeof(msg));
+            int sockfd = events[i].data.fd;
+            int ret = recv(sockfd, (void *)&msg, sizeof(msg), 0);
+            if (ret <= 0) {
+                epoll_ctl(epollfd, EPOLL_CTL_DEL, sockfd, NULL);
+                close(sockfd);
+                clients[sockfd].isonline = -1;
+                continue;
+            }
+            if (msg.type & PI_ACK) {
+                DBG(GREEN("<ACK> ack recved from %s!\n"), inet_ntoa(clients[sockfd].addr.sin_addr));
+                clients[sockfd].isonline = 10;
+            }
+        }
+    }
+}
+
+void heart_beat(int signum) {
+    struct pihealth_msg_ds msg;
+    msg.type = PI_HEART;            // 发送心跳信息
+    for (int i = 0; i < max; i++) {
+        if (clients[i].isonline) {
+            send(clients[i].sockfd, (void *)&msg, sizeof(msg), 0);
+            // 若isonline（心跳次数）等于0 说明客户端已断开
+            if (--clients[i].isonline == 0) {
+                epoll_ctl(epollfd, EPOLL_CTL_DEL, clients[i].sockfd, NULL);
+                close(clients[i].sockfd);
+                DBG(YELLOW("<HeartFailed> : %s is removed from list!\n"), inet_ntoa(clients[i].addr.sin_addr));
+            }
+        }
+    }
+}
 
 int check_online(struct sockaddr_in *addr) {
     int flag = 0;
@@ -82,7 +126,7 @@ void *do_login(void *arg) {
         ev.data.fd = sockfd;
         ev.events = EPOLLIN;
         epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd, &ev);
-        DBG(YELLOW("<client> : ---!\n"));
+        DBG(GREEN("<Reactor> : add client to reactor!\n"));
         // 代码到这sockfd其实就是客户
 
     }
