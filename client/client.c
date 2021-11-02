@@ -44,6 +44,18 @@ int main(int argc, char **argv) {
         perror("send token");
         exit(1);
     }
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(sockfd, &rfds);
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 10000;
+    if (select(sockfd + 1, &rfds, NULL, NULL, &tv) <= 0) {
+        close(sockfd);
+        DBG(RED("<Error> : server dont respond  token !\n"));
+        exit(1);
+    }
+
     // 使用ack来验证token是否是对的 这里应该使用respond和request报文
     int ack = 0;
     if (recv(sockfd, &ack, sizeof(ack), 0) < 0) {
@@ -54,6 +66,16 @@ int main(int argc, char **argv) {
     // 写成这样更准确表示token是正确的
     if (ack != 1) {
         fprintf(stderr, RED("Server Response Error!\n"));
+    }
+    while (1) {
+        struct pihealth_msg_ds msg;
+        bzero(&msg, sizeof(msg));
+        recv(sockfd, (void *)&msg, sizeof(msg), 0);
+        if (msg.type & PI_HEART) {
+            DBG(BLUE("<💗>\n"));
+            msg.type = PI_ACK;
+            send(sockfd, (void *)&msg, sizeof(msg), 0);
+        }
     }
     sleep(1000);
     return 0;
